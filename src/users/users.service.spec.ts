@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { UsersService } from './users.service';
 import { User } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -12,6 +13,7 @@ describe('UsersService', () => {
     create: jest.fn(),
     findOne: jest.fn(),
     findById: jest.fn(),
+    findByIdAndUpdate: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -349,6 +351,189 @@ describe('UsersService', () => {
       // When & Then: 에러가 전파되어야 함
       await expect(service.findOne(invalidId)).rejects.toThrow();
       expect(mockUserModel.findById).toHaveBeenCalledWith(invalidId);
+    });
+  });
+
+  describe('update', () => {
+    it('should update user information', async () => {
+      // Given: 사용자 ID와 수정할 정보
+      const userId = '507f1f77bcf86cd799439011';
+      const updateUserDto: UpdateUserDto = {
+        nickname: '수정된닉네임',
+        address: {
+          city: '부산시',
+          district: '해운대구',
+          street: '우동',
+        },
+      };
+
+      const existingUser = {
+        _id: userId,
+        email: 'test@example.com',
+        password: 'hashed_password',
+        nickname: '기존닉네임',
+        address: {
+          city: '서울시',
+          district: '강남구',
+          street: '역삼동',
+        },
+        wishList: [],
+        mannerTemperature: 36.5,
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const updatedUser = {
+        ...existingUser,
+        ...updateUserDto,
+        updatedAt: new Date(),
+      };
+
+      // Given: findByIdAndUpdate가 수정된 사용자를 반환하도록 모킹
+      mockUserModel.findByIdAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(updatedUser),
+      });
+
+      // When: 사용자 정보 수정
+      const result = await service.update(userId, updateUserDto);
+
+      // Then: findByIdAndUpdate가 올바른 인자로 호출되었는지 확인
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        updateUserDto,
+        { new: true },
+      );
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledTimes(1);
+
+      // Then: 수정된 사용자 정보가 반환되어야 함
+      expect(result).toEqual(updatedUser);
+      expect(result.nickname).toBe(updateUserDto.nickname);
+      expect(result.address).toEqual(updateUserDto.address);
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      // Given: 존재하지 않는 사용자 ID
+      const userId = '507f1f77bcf86cd799439099';
+      const updateUserDto: UpdateUserDto = {
+        nickname: '수정된닉네임',
+      };
+
+      // Given: findByIdAndUpdate가 null을 반환하도록 모킹
+      mockUserModel.findByIdAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      // When & Then: 사용자를 찾을 수 없을 때 에러 발생
+      await expect(service.update(userId, updateUserDto)).rejects.toThrow();
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        updateUserDto,
+        { new: true },
+      );
+    });
+
+    it('should handle invalid id format', async () => {
+      // Given: 잘못된 형식의 ID
+      const invalidId = 'invalid-id';
+      const updateUserDto: UpdateUserDto = {
+        nickname: '수정된닉네임',
+      };
+
+      // Given: MongoDB 에러 발생
+      const mongoError = new Error('Cast to ObjectId failed');
+      mockUserModel.findByIdAndUpdate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(mongoError),
+      });
+
+      // When & Then: 에러가 전파되어야 함
+      await expect(service.update(invalidId, updateUserDto)).rejects.toThrow();
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        invalidId,
+        updateUserDto,
+        { new: true },
+      );
+    });
+
+    it('should throw ConflictException when email already exists', async () => {
+      // Given: 사용자 ID와 중복된 이메일로 수정 시도
+      const userId = '507f1f77bcf86cd799439011';
+      const updateUserDto: UpdateUserDto = {
+        email: 'existing@example.com', // 이미 다른 사용자가 사용 중인 이메일
+      };
+
+      // Given: MongoDB duplicate key error 발생
+      const duplicateError = {
+        code: 11000,
+        keyPattern: { email: 1 },
+        keyValue: { email: 'existing@example.com' },
+      };
+
+      mockUserModel.findByIdAndUpdate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(duplicateError),
+      });
+
+      // When & Then: 중복 이메일로 인한 ConflictException 발생
+      await expect(service.update(userId, updateUserDto)).rejects.toThrow();
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        updateUserDto,
+        { new: true },
+      );
+    });
+
+    it('should hash password when password is included in update', async () => {
+      // Given: 사용자 ID와 비밀번호 변경
+      const userId = '507f1f77bcf86cd799439011';
+      const newPassword = 'newPassword123';
+      const hashedPassword = 'hashed_newPassword123';
+      const updateUserDto: UpdateUserDto = {
+        password: newPassword,
+      };
+
+      const existingUser = {
+        _id: userId,
+        email: 'test@example.com',
+        password: 'old_hashed_password',
+        nickname: '테스트유저',
+        wishList: [],
+        mannerTemperature: 36.5,
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const updatedUser = {
+        ...existingUser,
+        password: hashedPassword, // 해싱된 비밀번호
+        updatedAt: new Date(),
+      };
+
+      // Given: bcrypt.hash 모킹
+      const bcrypt = require('bcrypt');
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword);
+
+      // Given: findByIdAndUpdate가 수정된 사용자를 반환하도록 모킹
+      mockUserModel.findByIdAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(updatedUser),
+      });
+
+      // When: 사용자 비밀번호 수정
+      const result = await service.update(userId, updateUserDto);
+
+      // Then: 비밀번호가 해싱되었는지 확인
+      expect(bcrypt.hash).toHaveBeenCalledWith(newPassword, 10);
+      expect(bcrypt.hash).toHaveBeenCalledTimes(1);
+
+      // Then: findByIdAndUpdate가 해싱된 비밀번호로 호출되었는지 확인
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        { password: hashedPassword },
+        { new: true },
+      );
+
+      // Then: 수정된 사용자가 반환되어야 함
+      expect(result).toEqual(updatedUser);
     });
   });
 });

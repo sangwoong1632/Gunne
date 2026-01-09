@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserDocument } from './schemas/user.schema';
 import {
   BCRYPT_SALT_ROUNDS,
@@ -14,14 +15,30 @@ import {
 export class UsersService {
   constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
+  /**
+   * 비밀번호를 해싱하는 헬퍼 메서드
+   * create와 update에서 공통으로 사용
+   */
+  private async hashPassword(password: string): Promise<string> {
+    return await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+  }
+
+  /**
+   * MongoDB 에러를 NestJS 예외로 변환
+   * duplicate key error는 ConflictException으로 변환
+   */
+  private handleMongoError(error: any): never {
+    if (error.code === MONGO_DUPLICATE_KEY_ERROR_CODE) {
+      throw new ConflictException(ERROR_MESSAGES.EMAIL_ALREADY_EXISTS);
+    }
+    throw error;
+  }
+
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
     // DTO에서 유효성 검증이 완료된 상태로 도달
     try {
       // 비밀번호 해싱
-      const hashedPassword = await bcrypt.hash(
-        createUserDto.password,
-        BCRYPT_SALT_ROUNDS,
-      );
+      const hashedPassword = await this.hashPassword(createUserDto.password);
 
       // 사용자 생성 데이터 준비
       // 기본값(mannerTemperature, role)은 스키마에서 자동으로 설정됨
@@ -36,12 +53,7 @@ export class UsersService {
       const createdUser = await this.userModel.create(userData);
       return createdUser;
     } catch (error: any) {
-      // MongoDB duplicate key error (이메일 중복)
-      if (error.code === MONGO_DUPLICATE_KEY_ERROR_CODE) {
-        throw new ConflictException(ERROR_MESSAGES.EMAIL_ALREADY_EXISTS);
-      }
-      // 다른 에러는 그대로 전파
-      throw error;
+      this.handleMongoError(error);
     }
   }
 
@@ -55,10 +67,32 @@ export class UsersService {
     return user;
   }
 
-  // TODO: 구현 예정
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  update(_id: number, _updateUserDto: unknown) {
-    return `This action updates a user`;
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<UserDocument> {
+    try {
+      // 비밀번호가 포함되어 있으면 해싱
+      const updateData = { ...updateUserDto };
+      if (updateData.password) {
+        updateData.password = await this.hashPassword(updateData.password);
+      }
+
+      // 사용자 정보 수정
+      const updatedUser = await this.userModel
+        .findByIdAndUpdate(id, updateData, { new: true })
+        .exec();
+
+      if (!updatedUser) {
+        throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+
+      return updatedUser;
+    } catch (error: any) {
+      // NotFoundException은 그대로 전파
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // MongoDB 에러 처리
+      this.handleMongoError(error);
+    }
   }
 
   remove(id: number) {

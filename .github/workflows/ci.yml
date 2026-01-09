@@ -33,12 +33,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('gunne/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
 
       - name: Install dependencies
-        working-directory: ./gunne
         run: npm ci
 
       - name: Wait for MongoDB
@@ -46,15 +45,12 @@ jobs:
           timeout 30 bash -c 'until mongosh --host localhost:27017 --eval "db.adminCommand(\"ping\")" --quiet; do sleep 1; done'
 
       - name: Run linter
-        working-directory: ./gunne
         run: npm run lint
 
       - name: Build
-        working-directory: ./gunne
         run: npm run build
 
       - name: Run tests
-        working-directory: ./gunne
         run: npm run test
         env:
           MONGO_URI: mongodb://localhost:27017/test

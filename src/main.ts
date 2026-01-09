@@ -22,7 +22,7 @@ async function bootstrap() {
     .setDescription('TDD로 만드는 중고거래 서비스 API 문서입니다.')
     .setVersion('1.0')
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document); // 'api' 주소로 접속하게 설정
   // (여기까지)
@@ -31,4 +31,4 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
 }
-bootstrap();
+void bootstrap();

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { UsersController } from './users.controller';
@@ -140,7 +141,9 @@ describe('UsersController', () => {
       };
 
       // Given: Service에서 ConflictException 발생
-      const conflictError = new ConflictException('이미 존재하는 이메일입니다.');
+      const conflictError = new ConflictException(
+        '이미 존재하는 이메일입니다.',
+      );
       mockUsersService.create.mockRejectedValue(conflictError);
 
       // When & Then: 에러가 전파되어야 함
@@ -212,7 +215,9 @@ describe('UsersController', () => {
 
       // When: Controller의 findOne 메서드 호출
       // Red 단계: 타입 에러를 피하기 위해 타입 단언 사용 (실제로는 런타임 에러 발생)
-      const result = (await controller.findOne(userId)) as unknown as UserResponseDto;
+      const result = (await controller.findOne(
+        userId,
+      )) as unknown as UserResponseDto;
 
       // Then: Service의 findOne 메서드가 올바른 ID로 호출되었는지 확인
       expect(service.findOne).toHaveBeenCalledWith(userId);
@@ -238,7 +243,9 @@ describe('UsersController', () => {
       mockUsersService.findOne.mockRejectedValue(notFoundError);
 
       // When & Then: 에러가 전파되어야 함
-      await expect(controller.findOne(userId)).rejects.toThrow(NotFoundException);
+      await expect(controller.findOne(userId)).rejects.toThrow(
+        NotFoundException,
+      );
       await expect(controller.findOne(userId)).rejects.toThrow(
         '사용자를 찾을 수 없습니다.',
       );
@@ -352,7 +359,9 @@ describe('UsersController', () => {
       };
 
       // Given: Service에서 ConflictException 발생
-      const conflictError = new ConflictException('이미 존재하는 이메일입니다.');
+      const conflictError = new ConflictException(
+        '이미 존재하는 이메일입니다.',
+      );
       mockUsersService.update.mockRejectedValue(conflictError);
 
       // When & Then: 에러가 전파되어야 함
@@ -377,7 +386,9 @@ describe('UsersController', () => {
       mockUsersService.update.mockRejectedValue(mongoError);
 
       // When & Then: 에러가 전파되어야 함
-      await expect(controller.update(invalidId, updateUserDto)).rejects.toThrow();
+      await expect(
+        controller.update(invalidId, updateUserDto),
+      ).rejects.toThrow();
       expect(service.update).toHaveBeenCalledWith(invalidId, updateUserDto);
     });
   });

@@ -14,6 +14,7 @@ describe('UsersService', () => {
     findOne: jest.fn(),
     findById: jest.fn(),
     findByIdAndUpdate: jest.fn(),
+    findByIdAndDelete: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -534,6 +535,65 @@ describe('UsersService', () => {
 
       // Then: 수정된 사용자가 반환되어야 함
       expect(result).toEqual(updatedUser);
+    });
+  });
+
+  describe('remove', () => {
+    it('should delete user by id', async () => {
+      // Given: 사용자 ID
+      const userId = '507f1f77bcf86cd799439011';
+      const deletedUser = {
+        _id: userId,
+        email: 'test@example.com',
+        password: 'hashed_password',
+        nickname: '테스트유저',
+        wishList: [],
+        mannerTemperature: 36.5,
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Given: findByIdAndDelete가 삭제된 사용자를 반환하도록 모킹
+      mockUserModel.findByIdAndDelete.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(deletedUser),
+      });
+
+      // When: 사용자 삭제
+      await service.remove(userId);
+
+      // Then: findByIdAndDelete가 올바른 ID로 호출되었는지 확인
+      expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledWith(userId);
+      expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      // Given: 존재하지 않는 사용자 ID
+      const userId = '507f1f77bcf86cd799439099';
+
+      // Given: findByIdAndDelete가 null을 반환하도록 모킹
+      mockUserModel.findByIdAndDelete.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      // When & Then: 사용자를 찾을 수 없을 때 에러 발생
+      await expect(service.remove(userId)).rejects.toThrow();
+      expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledWith(userId);
+    });
+
+    it('should handle invalid id format', async () => {
+      // Given: 잘못된 형식의 ID
+      const invalidId = 'invalid-id';
+
+      // Given: MongoDB 에러 발생
+      const mongoError = new Error('Cast to ObjectId failed');
+      mockUserModel.findByIdAndDelete.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(mongoError),
+      });
+
+      // When & Then: 에러가 전파되어야 함
+      await expect(service.remove(invalidId)).rejects.toThrow();
+      expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledWith(invalidId);
     });
   });
 });

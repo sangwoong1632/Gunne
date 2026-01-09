@@ -14,6 +14,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { UserDocument } from './schemas/user.schema';
 
 @ApiTags('users')
 @Controller('users')
@@ -24,10 +25,14 @@ export class UsersController {
    * UserDocument에서 비밀번호를 제외한 UserResponseDto로 변환
    * Mongoose 문서인 경우 toObject() 사용, 일반 객체인 경우 그대로 사용
    */
-  private excludePassword(user: any): UserResponseDto {
+  private excludePassword(user: UserDocument): UserResponseDto {
     const userObject =
       typeof user.toObject === 'function' ? user.toObject() : user;
-    const { password, ...userResponse } = userObject;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...userResponse } = userObject as unknown as Record<
+      string,
+      unknown
+    >;
     return userResponse as unknown as UserResponseDto;
   }
 

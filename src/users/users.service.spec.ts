@@ -1,21 +1,37 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
+import { Model, Query } from 'mongoose';
+import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
-import { User } from './schemas/user.schema';
+import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
+// bcrypt 모킹
+jest.mock('bcrypt', () => ({
+  hash: jest.fn(),
+}));
+
 describe('UsersService', () => {
   let service: UsersService;
-  let userModel: any;
 
+  // Mock UserModel - 필요한 메서드만 모킹
   const mockUserModel = {
-    create: jest.fn(),
+    create: jest.fn<Promise<UserDocument>, [CreateUserDto]>(),
     findOne: jest.fn(),
     findById: jest.fn(),
     findByIdAndUpdate: jest.fn(),
     findByIdAndDelete: jest.fn(),
-  };
+  } as unknown as jest.Mocked<
+    Pick<
+      Model<UserDocument>,
+      | 'create'
+      | 'findOne'
+      | 'findById'
+      | 'findByIdAndUpdate'
+      | 'findByIdAndDelete'
+    >
+  >;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -29,11 +45,11 @@ describe('UsersService', () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    userModel = module.get(getModelToken(User.name));
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -69,6 +85,7 @@ describe('UsersService', () => {
       };
 
       // Given: 모델의 create 메서드가 생성된 사용자를 반환하도록 모킹
+      // @ts-expect-error - Mongoose Model.create의 복잡한 타입 때문에 타입 단언 필요
       mockUserModel.create.mockResolvedValue(createdUser);
 
       // When: 사용자 생성 메서드 호출
@@ -113,10 +130,11 @@ describe('UsersService', () => {
         updatedAt: new Date(),
       };
 
+      // @ts-expect-error - Mongoose Model.create의 복잡한 타입 때문에 타입 단언 필요
       mockUserModel.create.mockResolvedValue(createdUser);
 
       // When: 사용자 생성
-      const result = (await service.create(createUserDto)) as any;
+      const result = await service.create(createUserDto);
 
       // Then: 기본값이 설정되어야 함
       expect(result.mannerTemperature).toBe(36.5);
@@ -160,7 +178,7 @@ describe('UsersService', () => {
           district: '강남구',
           street: '역삼동',
         },
-      } as any;
+      } as CreateUserDto;
 
       // When & Then: 필수 필드 누락으로 인한 에러 발생
       await expect(service.create(createUserDto)).rejects.toThrow();
@@ -176,7 +194,7 @@ describe('UsersService', () => {
           district: '강남구',
           street: '역삼동',
         },
-      } as any;
+      } as CreateUserDto;
 
       // When & Then: 필수 필드 누락으로 인한 에러 발생
       await expect(service.create(createUserDto)).rejects.toThrow();
@@ -192,7 +210,7 @@ describe('UsersService', () => {
           district: '강남구',
           street: '역삼동',
         },
-      } as any;
+      } as CreateUserDto;
 
       // When & Then: 필수 필드 누락으로 인한 에러 발생
       await expect(service.create(createUserDto)).rejects.toThrow();
@@ -243,6 +261,7 @@ describe('UsersService', () => {
         updatedAt: new Date(),
       };
 
+      // @ts-expect-error - Mongoose Model.create의 복잡한 타입 때문에 타입 단언 필요
       mockUserModel.create.mockResolvedValue(createdUser);
 
       // When: 사용자 생성
@@ -278,7 +297,7 @@ describe('UsersService', () => {
       // Given: findById가 사용자를 반환하도록 모킹
       mockUserModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(foundUser),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When: 사용자 조회
       const result = await service.findOne(userId);
@@ -313,7 +332,7 @@ describe('UsersService', () => {
 
       mockUserModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(foundUser),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When: 사용자 조회
       const result = await service.findOne(userId);
@@ -332,7 +351,7 @@ describe('UsersService', () => {
       // Given: findById가 null을 반환하도록 모킹
       mockUserModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 사용자를 찾을 수 없을 때 에러 발생
       await expect(service.findOne(userId)).rejects.toThrow();
@@ -347,7 +366,7 @@ describe('UsersService', () => {
       const mongoError = new Error('Cast to ObjectId failed');
       mockUserModel.findById.mockReturnValue({
         exec: jest.fn().mockRejectedValue(mongoError),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 에러가 전파되어야 함
       await expect(service.findOne(invalidId)).rejects.toThrow();
@@ -394,7 +413,7 @@ describe('UsersService', () => {
       // Given: findByIdAndUpdate가 수정된 사용자를 반환하도록 모킹
       mockUserModel.findByIdAndUpdate.mockReturnValue({
         exec: jest.fn().mockResolvedValue(updatedUser),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When: 사용자 정보 수정
       const result = await service.update(userId, updateUserDto);
@@ -423,7 +442,7 @@ describe('UsersService', () => {
       // Given: findByIdAndUpdate가 null을 반환하도록 모킹
       mockUserModel.findByIdAndUpdate.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 사용자를 찾을 수 없을 때 에러 발생
       await expect(service.update(userId, updateUserDto)).rejects.toThrow();
@@ -445,7 +464,7 @@ describe('UsersService', () => {
       const mongoError = new Error('Cast to ObjectId failed');
       mockUserModel.findByIdAndUpdate.mockReturnValue({
         exec: jest.fn().mockRejectedValue(mongoError),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 에러가 전파되어야 함
       await expect(service.update(invalidId, updateUserDto)).rejects.toThrow();
@@ -472,7 +491,7 @@ describe('UsersService', () => {
 
       mockUserModel.findByIdAndUpdate.mockReturnValue({
         exec: jest.fn().mockRejectedValue(duplicateError),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 중복 이메일로 인한 ConflictException 발생
       await expect(service.update(userId, updateUserDto)).rejects.toThrow();
@@ -511,13 +530,12 @@ describe('UsersService', () => {
       };
 
       // Given: bcrypt.hash 모킹
-      const bcrypt = require('bcrypt');
-      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword);
+      (bcrypt.hash as jest.Mock).mockResolvedValue(hashedPassword);
 
       // Given: findByIdAndUpdate가 수정된 사용자를 반환하도록 모킹
       mockUserModel.findByIdAndUpdate.mockReturnValue({
         exec: jest.fn().mockResolvedValue(updatedUser),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When: 사용자 비밀번호 수정
       const result = await service.update(userId, updateUserDto);
@@ -557,7 +575,7 @@ describe('UsersService', () => {
       // Given: findByIdAndDelete가 삭제된 사용자를 반환하도록 모킹
       mockUserModel.findByIdAndDelete.mockReturnValue({
         exec: jest.fn().mockResolvedValue(deletedUser),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When: 사용자 삭제
       await service.remove(userId);
@@ -574,7 +592,7 @@ describe('UsersService', () => {
       // Given: findByIdAndDelete가 null을 반환하도록 모킹
       mockUserModel.findByIdAndDelete.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 사용자를 찾을 수 없을 때 에러 발생
       await expect(service.remove(userId)).rejects.toThrow();
@@ -589,7 +607,7 @@ describe('UsersService', () => {
       const mongoError = new Error('Cast to ObjectId failed');
       mockUserModel.findByIdAndDelete.mockReturnValue({
         exec: jest.fn().mockRejectedValue(mongoError),
-      });
+      } as unknown as Query<UserDocument | null, UserDocument>);
 
       // When & Then: 에러가 전파되어야 함
       await expect(service.remove(invalidId)).rejects.toThrow();

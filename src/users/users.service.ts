@@ -31,7 +31,7 @@ export class UsersService {
    * MongoDB 에러를 NestJS 예외로 변환
    * duplicate key error는 ConflictException으로 변환
    */
-  private handleMongoError(error: any): never {
+  private handleMongoError(error: Error & { code?: number }): never {
     if (error.code === MONGO_DUPLICATE_KEY_ERROR_CODE) {
       throw new ConflictException(ERROR_MESSAGES.EMAIL_ALREADY_EXISTS);
     }

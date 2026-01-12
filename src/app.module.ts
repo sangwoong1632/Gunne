@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/products.module';
 import { ChatsModule } from './chats/chats.module';
+import { AuthModule } from './auth/auth.module';
+import { RedisModule } from './common/redis.module';
 
 @Module({
   imports: [
@@ -24,9 +26,11 @@ import { ChatsModule } from './chats/chats.module';
       }),
       inject: [ConfigService],
     }),
+    RedisModule,
     UsersModule,
     ProductsModule,
     ChatsModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

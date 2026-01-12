@@ -49,6 +49,9 @@ lerna-debug.log*
 # MongoDB data
 mongo-data/
 
+# Redis data
+redis-data/
+
 # Runtime data
 pids
 *.pid

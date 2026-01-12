@@ -14,6 +14,15 @@ services:
       # DB 데이터를 내 컴퓨터에도 저장 (컨테이너가 꺼져도 데이터 유지)
       - ./mongo-data:/data/db
 
+  redis:
+    image: redis:latest
+    container_name: nest_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+    command: redis-server --appendonly yes # 데이터 영구 저장 옵션 켜기
+
   # 2. NestJS 앱 서비스
   app:
     build: .

@@ -127,7 +127,7 @@ export class AuthService {
   async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string }> {
     try {
       // 1. Refresh Token 검증
-      const payload = await this.jwtService.verifyAsync(refreshToken);
+      const payload = await this.jwtService.verifyAsync<{ sub: string; email: string }>(refreshToken);
 
       // 2. Redis에서 Refresh Token 확인
       const refreshTokenKey = `refresh_token:${payload.sub}`;
@@ -142,7 +142,7 @@ export class AuthService {
       const accessToken = await this.jwtService.signAsync(newPayload);
 
       return { accessToken };
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException(ERROR_MESSAGES.INVALID_REFRESH_TOKEN);
     }
   }

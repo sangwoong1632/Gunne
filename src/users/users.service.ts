@@ -56,8 +56,8 @@ export class UsersService {
       // 사용자 생성
       const createdUser = await this.userModel.create(userData);
       return createdUser;
-    } catch (error: any) {
-      this.handleMongoError(error);
+    } catch (error) {
+      this.handleMongoError(error as Error & { code?: number });
     }
   }
 
@@ -92,13 +92,13 @@ export class UsersService {
       }
 
       return updatedUser;
-    } catch (error: any) {
+    } catch (error) {
       // NotFoundException은 그대로 전파
       if (error instanceof NotFoundException) {
         throw error;
       }
       // MongoDB 에러 처리
-      this.handleMongoError(error);
+      this.handleMongoError(error as Error & { code?: number });
     }
   }
 

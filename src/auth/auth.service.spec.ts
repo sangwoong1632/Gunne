@@ -22,6 +22,21 @@ describe('AuthService', () => {
   let mockConfigService: jest.Mocked<Pick<ConfigService, 'get'>>;
   let mockRedisClient: jest.Mocked<Pick<Redis, 'setex'>>;
 
+  /**
+   * Mock findOne의 반환값을 생성하는 헬퍼 함수
+   * Mongoose의 복잡한 타입을 처리하기 위한 헬퍼
+   * 헬퍼 함수 내부에서 타입 단언을 처리하여 사용하는 곳에서는 깔끔하게 사용 가능
+   * @param user 사용자 객체 또는 null (일반 객체도 허용)
+   * @returns Mock Query 객체
+   */
+  const createMockFindOneResult = (
+    user: UserDocument | null | Record<string, unknown>,
+  ): ReturnType<typeof mockUserModel.findOne> => {
+    return {
+      exec: jest.fn().mockResolvedValue(user as UserDocument | null),
+    } as unknown as ReturnType<typeof mockUserModel.findOne>;
+  };
+
   beforeEach(async () => {
     // Mock UserModel
     mockUserModel = {
@@ -95,9 +110,7 @@ describe('AuthService', () => {
       };
 
       // Given: findOne이 사용자를 반환
-      mockUserModel.findOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(user),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findOne.mockReturnValue(createMockFindOneResult(user));
 
       // Given: bcrypt.compare가 true를 반환 (비밀번호 일치)
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -140,9 +153,7 @@ describe('AuthService', () => {
       };
 
       // Given: findOne이 null을 반환 (사용자를 찾지 못함)
-      mockUserModel.findOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findOne.mockReturnValue(createMockFindOneResult(null));
 
       // When & Then: UnauthorizedException이 발생해야 함
       await expect(service.login(loginDto)).rejects.toThrow(
@@ -177,9 +188,7 @@ describe('AuthService', () => {
       };
 
       // Given: findOne이 사용자를 반환
-      mockUserModel.findOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(user),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findOne.mockReturnValue(createMockFindOneResult(user));
 
       // Given: bcrypt.compare가 false를 반환 (비밀번호 불일치)
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
@@ -221,6 +230,7 @@ describe('AuthService', () => {
         };
 
         // Given: findOne이 사용자를 반환
+        // @ts-expect-error - Mongoose Model.findOne의 복잡한 타입 때문에 타입 단언 필요
         mockUserModel.findOne.mockReturnValue({
           exec: jest.fn().mockResolvedValue(user),
         } as unknown as Query<UserDocument | null, UserDocument>);
@@ -292,6 +302,7 @@ describe('AuthService', () => {
         };
 
         // Given: findOne이 사용자를 반환
+        // @ts-expect-error - Mongoose Model.findOne의 복잡한 타입 때문에 타입 단언 필요
         mockUserModel.findOne.mockReturnValue({
           exec: jest.fn().mockResolvedValue(user),
         } as unknown as Query<UserDocument | null, UserDocument>);
@@ -329,6 +340,7 @@ describe('AuthService', () => {
         };
 
         // Given: findOne이 사용자를 반환
+        // @ts-expect-error - Mongoose Model.findOne의 복잡한 타입 때문에 타입 단언 필요
         mockUserModel.findOne.mockReturnValue({
           exec: jest.fn().mockResolvedValue(user),
         } as unknown as Query<UserDocument | null, UserDocument>);
@@ -380,6 +392,7 @@ describe('AuthService', () => {
         };
 
         // Given: findOne이 사용자를 반환
+        // @ts-expect-error - Mongoose Model.findOne의 복잡한 타입 때문에 타입 단언 필요
         mockUserModel.findOne.mockReturnValue({
           exec: jest.fn().mockResolvedValue(user),
         } as unknown as Query<UserDocument | null, UserDocument>);

@@ -33,6 +33,29 @@ describe('UsersService', () => {
     >
   >;
 
+  /**
+   * Mock Mongoose Query의 반환값을 생성하는 헬퍼 함수
+   * Mongoose의 복잡한 타입을 처리하기 위한 헬퍼
+   * 헬퍼 함수 내부에서 타입 단언을 처리하여 사용하는 곳에서는 깔끔하게 사용 가능
+   * @param document 사용자 문서 또는 null (일반 객체도 허용)
+   * @param shouldReject 에러를 발생시킬지 여부 (기본값: false)
+   * @param error 에러 객체 또는 에러 형태의 객체 (shouldReject가 true일 때 사용)
+   * @returns Mock Query 객체
+   */
+  const createMockQueryResult = (
+    document: UserDocument | null | Record<string, unknown>,
+    shouldReject = false,
+    error?: Error | Record<string, unknown>,
+  ): Query<UserDocument | null, UserDocument> => {
+    const execMock = shouldReject && error
+      ? jest.fn().mockRejectedValue(error)
+      : jest.fn().mockResolvedValue(document as UserDocument | null);
+    
+    return {
+      exec: execMock,
+    } as unknown as Query<UserDocument | null, UserDocument>;
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -295,9 +318,7 @@ describe('UsersService', () => {
       };
 
       // Given: findById가 사용자를 반환하도록 모킹
-      mockUserModel.findById.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(foundUser),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findById.mockReturnValue(createMockQueryResult(foundUser));
 
       // When: 사용자 조회
       const result = await service.findOne(userId);
@@ -349,9 +370,7 @@ describe('UsersService', () => {
       const userId = '507f1f77bcf86cd799439099';
 
       // Given: findById가 null을 반환하도록 모킹
-      mockUserModel.findById.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findById.mockReturnValue(createMockQueryResult(null));
 
       // When & Then: 사용자를 찾을 수 없을 때 에러 발생
       await expect(service.findOne(userId)).rejects.toThrow();
@@ -364,9 +383,7 @@ describe('UsersService', () => {
 
       // Given: MongoDB 에러 발생
       const mongoError = new Error('Cast to ObjectId failed');
-      mockUserModel.findById.mockReturnValue({
-        exec: jest.fn().mockRejectedValue(mongoError),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findById.mockReturnValue(createMockQueryResult(null, true, mongoError));
 
       // When & Then: 에러가 전파되어야 함
       await expect(service.findOne(invalidId)).rejects.toThrow();
@@ -411,9 +428,7 @@ describe('UsersService', () => {
       };
 
       // Given: findByIdAndUpdate가 수정된 사용자를 반환하도록 모킹
-      mockUserModel.findByIdAndUpdate.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(updatedUser),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndUpdate.mockReturnValue(createMockQueryResult(updatedUser));
 
       // When: 사용자 정보 수정
       const result = await service.update(userId, updateUserDto);
@@ -440,9 +455,7 @@ describe('UsersService', () => {
       };
 
       // Given: findByIdAndUpdate가 null을 반환하도록 모킹
-      mockUserModel.findByIdAndUpdate.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndUpdate.mockReturnValue(createMockQueryResult(null));
 
       // When & Then: 사용자를 찾을 수 없을 때 에러 발생
       await expect(service.update(userId, updateUserDto)).rejects.toThrow();
@@ -462,9 +475,7 @@ describe('UsersService', () => {
 
       // Given: MongoDB 에러 발생
       const mongoError = new Error('Cast to ObjectId failed');
-      mockUserModel.findByIdAndUpdate.mockReturnValue({
-        exec: jest.fn().mockRejectedValue(mongoError),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndUpdate.mockReturnValue(createMockQueryResult(null, true, mongoError));
 
       // When & Then: 에러가 전파되어야 함
       await expect(service.update(invalidId, updateUserDto)).rejects.toThrow();
@@ -489,9 +500,7 @@ describe('UsersService', () => {
         keyValue: { email: 'existing@example.com' },
       };
 
-      mockUserModel.findByIdAndUpdate.mockReturnValue({
-        exec: jest.fn().mockRejectedValue(duplicateError),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndUpdate.mockReturnValue(createMockQueryResult(null, true, duplicateError));
 
       // When & Then: 중복 이메일로 인한 ConflictException 발생
       await expect(service.update(userId, updateUserDto)).rejects.toThrow();
@@ -533,9 +542,7 @@ describe('UsersService', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(hashedPassword);
 
       // Given: findByIdAndUpdate가 수정된 사용자를 반환하도록 모킹
-      mockUserModel.findByIdAndUpdate.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(updatedUser),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndUpdate.mockReturnValue(createMockQueryResult(updatedUser));
 
       // When: 사용자 비밀번호 수정
       const result = await service.update(userId, updateUserDto);
@@ -573,9 +580,7 @@ describe('UsersService', () => {
       };
 
       // Given: findByIdAndDelete가 삭제된 사용자를 반환하도록 모킹
-      mockUserModel.findByIdAndDelete.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(deletedUser),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndDelete.mockReturnValue(createMockQueryResult(deletedUser));
 
       // When: 사용자 삭제
       await service.remove(userId);
@@ -590,9 +595,7 @@ describe('UsersService', () => {
       const userId = '507f1f77bcf86cd799439099';
 
       // Given: findByIdAndDelete가 null을 반환하도록 모킹
-      mockUserModel.findByIdAndDelete.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(null),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndDelete.mockReturnValue(createMockQueryResult(null));
 
       // When & Then: 사용자를 찾을 수 없을 때 에러 발생
       await expect(service.remove(userId)).rejects.toThrow();
@@ -605,9 +608,7 @@ describe('UsersService', () => {
 
       // Given: MongoDB 에러 발생
       const mongoError = new Error('Cast to ObjectId failed');
-      mockUserModel.findByIdAndDelete.mockReturnValue({
-        exec: jest.fn().mockRejectedValue(mongoError),
-      } as unknown as Query<UserDocument | null, UserDocument>);
+      mockUserModel.findByIdAndDelete.mockReturnValue(createMockQueryResult(null, true, mongoError));
 
       // When & Then: 에러가 전파되어야 함
       await expect(service.remove(invalidId)).rejects.toThrow();

@@ -7,7 +7,7 @@ export const ERROR_MESSAGES = {
 } as const;
 
 // JWT 토큰 관련 상수
-export const JWT_DEFAULT_REFRESH_EXPIRES_IN = '14d' as const satisfies StringValue;
+export const JWT_DEFAULT_REFRESH_EXPIRES_IN = '7d' as const satisfies StringValue;
 export const JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS = 7 * 24 * 60 * 60; // 7일 (초 단위)
 
 // Redis 키 패턴

@@ -13,7 +13,18 @@ import type { StringValue } from 'ms';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { ERROR_MESSAGES } from './constants/auth.constants';
+import {
+  ERROR_MESSAGES,
+  JWT_DEFAULT_REFRESH_EXPIRES_IN,
+  JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS,
+  REDIS_KEY_PATTERNS,
+} from './constants/auth.constants';
+
+// JWT Payload 타입 정의
+interface JwtPayload {
+  sub: string;
+  email: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -53,6 +64,18 @@ export class AuthService {
   }
 
   /**
+   * JWT Payload 생성
+   * @param user 사용자 문서
+   * @returns JWT Payload
+   */
+  private createJwtPayload(user: UserDocument): JwtPayload {
+    return {
+      sub: user._id.toString(),
+      email: user.email,
+    };
+  }
+
+  /**
    * JWT 토큰 생성 (Access Token, Refresh Token)
    * @param user 사용자 문서
    * @returns Access Token과 Refresh Token
@@ -61,9 +84,11 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const payload = { sub: user._id.toString(), email: user.email };
+    const payload = this.createJwtPayload(user);
     const accessToken = await this.jwtService.signAsync(payload);
-    const refreshTokenExpiresIn = (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d') as StringValue;
+    
+    const refreshTokenExpiresIn = (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || 
+      JWT_DEFAULT_REFRESH_EXPIRES_IN) as StringValue;
     const refreshToken = await this.jwtService.signAsync(payload, {
       expiresIn: refreshTokenExpiresIn,
     });
@@ -80,16 +105,33 @@ export class AuthService {
     userId: string,
     refreshToken: string,
   ): Promise<void> {
-    const refreshTokenKey = `refresh_token:${userId}`;
+    const refreshTokenKey = REDIS_KEY_PATTERNS.REFRESH_TOKEN(userId);
     const refreshTokenExpiry = this.configService.get<number>(
       'JWT_REFRESH_EXPIRES_IN_SECONDS',
-    ) || 7 * 24 * 60 * 60; // 기본 7일 (초 단위)
+    ) || JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS;
 
     await this.redisClient.setex(
       refreshTokenKey,
       refreshTokenExpiry,
       refreshToken,
     );
+  }
+
+  /**
+   * 사용자 정보를 응답 DTO 형식으로 변환
+   * @param user 사용자 문서
+   * @returns 사용자 응답 객체
+   */
+  private createUserResponse(user: UserDocument): {
+    id: string;
+    email: string;
+    nickname: string;
+  } {
+    return {
+      id: user._id.toString(),
+      email: user.email,
+      nickname: user.nickname,
+    };
   }
 
   /**
@@ -113,12 +155,29 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: {
-        id: user._id.toString(),
-        email: user.email,
-        nickname: user.nickname,
-      },
+      user: this.createUserResponse(user),
     };
+  }
+
+  /**
+   * Refresh Token 검증 및 Redis 확인
+   * @param refreshToken Refresh Token
+   * @returns 검증된 JWT Payload
+   * @throws UnauthorizedException Refresh Token이 유효하지 않을 경우
+   */
+  private async validateRefreshToken(refreshToken: string): Promise<JwtPayload> {
+    // 1. Refresh Token 검증
+    const payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken);
+
+    // 2. Redis에서 Refresh Token 확인
+    const refreshTokenKey = REDIS_KEY_PATTERNS.REFRESH_TOKEN(payload.sub);
+    const storedToken = await this.redisClient.get(refreshTokenKey);
+
+    if (!storedToken || storedToken !== refreshToken) {
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_REFRESH_TOKEN);
+    }
+
+    return payload;
   }
 
   /**
@@ -126,23 +185,18 @@ export class AuthService {
    */
   async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string }> {
     try {
-      // 1. Refresh Token 검증
-      const payload = await this.jwtService.verifyAsync<{ sub: string; email: string }>(refreshToken);
+      // 1. Refresh Token 검증 및 Redis 확인
+      const payload = await this.validateRefreshToken(refreshToken);
 
-      // 2. Redis에서 Refresh Token 확인
-      const refreshTokenKey = `refresh_token:${payload.sub}`;
-      const storedToken = await this.redisClient.get(refreshTokenKey);
-
-      if (!storedToken || storedToken !== refreshToken) {
-        throw new UnauthorizedException(ERROR_MESSAGES.INVALID_REFRESH_TOKEN);
-      }
-
-      // 3. 새로운 Access Token 생성
-      const newPayload = { sub: payload.sub, email: payload.email };
-      const accessToken = await this.jwtService.signAsync(newPayload);
+      // 2. 새로운 Access Token 생성
+      const accessToken = await this.jwtService.signAsync(payload);
 
       return { accessToken };
-    } catch {
+    } catch (error) {
+      // JWT 검증 실패 또는 Redis 확인 실패 시 동일한 에러 메시지 반환
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException(ERROR_MESSAGES.INVALID_REFRESH_TOKEN);
     }
   }
@@ -152,7 +206,7 @@ export class AuthService {
    * Redis에서 Refresh Token을 삭제합니다.
    */
   async logout(userId: string): Promise<void> {
-    const refreshTokenKey = `refresh_token:${userId}`;
+    const refreshTokenKey = REDIS_KEY_PATTERNS.REFRESH_TOKEN(userId);
     await this.redisClient.del(refreshTokenKey);
   }
 }

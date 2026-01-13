@@ -198,5 +198,231 @@ describe('AuthService', () => {
         user.password,
       );
     });
+
+    describe('토큰 발급', () => {
+      it('로그인 성공 시 Access Token과 Refresh Token을 발급해야 함', async () => {
+        // Given: 올바른 이메일과 비밀번호
+        const loginDto: LoginDto = {
+          email: 'test@example.com',
+          password: 'correctPassword',
+        };
+
+        // Given: 사용자 객체
+        const user = {
+          _id: '507f1f77bcf86cd799439011',
+          email: 'test@example.com',
+          password: 'hashed_correct_password',
+          nickname: '테스트유저',
+          wishList: [],
+          mannerTemperature: 36.5,
+          role: 'user',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        // Given: findOne이 사용자를 반환
+        mockUserModel.findOne.mockReturnValue({
+          exec: jest.fn().mockResolvedValue(user),
+        } as unknown as Query<UserDocument | null, UserDocument>);
+
+        // Given: bcrypt.compare가 true를 반환 (비밀번호 일치)
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        // Given: JWT 토큰 생성 모킹
+        const accessToken = 'access_token_string';
+        const refreshToken = 'refresh_token_string';
+        mockJwtService.signAsync
+          .mockResolvedValueOnce(accessToken)
+          .mockResolvedValueOnce(refreshToken);
+
+        // Given: ConfigService 모킹
+        mockConfigService.get
+          .mockReturnValueOnce('7d') // JWT_REFRESH_EXPIRES_IN
+          .mockReturnValueOnce(604800); // JWT_REFRESH_EXPIRES_IN_SECONDS
+
+        // Given: Redis setex 모킹
+        mockRedisClient.setex.mockResolvedValue('OK');
+
+        // When: 로그인 메서드 호출
+        const result = await service.login(loginDto);
+
+        // Then: Access Token이 올바른 payload로 생성되었는지 확인
+        expect(mockJwtService.signAsync).toHaveBeenNthCalledWith(1, {
+          sub: user._id.toString(),
+          email: user.email,
+        });
+
+        // Then: Refresh Token이 올바른 payload와 옵션으로 생성되었는지 확인
+        expect(mockJwtService.signAsync).toHaveBeenNthCalledWith(
+          2,
+          { sub: user._id.toString(), email: user.email },
+          { expiresIn: '7d' },
+        );
+
+        // Then: Refresh Token이 Redis에 저장되었는지 확인
+        expect(mockRedisClient.setex).toHaveBeenCalledWith(
+          `refresh_token:${user._id.toString()}`,
+          604800,
+          refreshToken,
+        );
+
+        // Then: 응답에 Access Token과 Refresh Token이 포함되어 있는지 확인
+        expect(result.accessToken).toBe(accessToken);
+        expect(result.refreshToken).toBe(refreshToken);
+      });
+
+      it('JWT 토큰 생성 실패 시 에러를 던져야 함', async () => {
+        // Given: 올바른 이메일과 비밀번호
+        const loginDto: LoginDto = {
+          email: 'test@example.com',
+          password: 'correctPassword',
+        };
+
+        // Given: 사용자 객체
+        const user = {
+          _id: '507f1f77bcf86cd799439011',
+          email: 'test@example.com',
+          password: 'hashed_correct_password',
+          nickname: '테스트유저',
+          wishList: [],
+          mannerTemperature: 36.5,
+          role: 'user',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        // Given: findOne이 사용자를 반환
+        mockUserModel.findOne.mockReturnValue({
+          exec: jest.fn().mockResolvedValue(user),
+        } as unknown as Query<UserDocument | null, UserDocument>);
+
+        // Given: bcrypt.compare가 true를 반환 (비밀번호 일치)
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        // Given: JWT 토큰 생성 실패 모킹
+        mockJwtService.signAsync.mockRejectedValueOnce(
+          new Error('JWT signing failed'),
+        );
+
+        // When & Then: 에러가 발생해야 함
+        await expect(service.login(loginDto)).rejects.toThrow('JWT signing failed');
+      });
+
+      it('Redis 저장 실패 시 에러를 던져야 함', async () => {
+        // Given: 올바른 이메일과 비밀번호
+        const loginDto: LoginDto = {
+          email: 'test@example.com',
+          password: 'correctPassword',
+        };
+
+        // Given: 사용자 객체
+        const user = {
+          _id: '507f1f77bcf86cd799439011',
+          email: 'test@example.com',
+          password: 'hashed_correct_password',
+          nickname: '테스트유저',
+          wishList: [],
+          mannerTemperature: 36.5,
+          role: 'user',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        // Given: findOne이 사용자를 반환
+        mockUserModel.findOne.mockReturnValue({
+          exec: jest.fn().mockResolvedValue(user),
+        } as unknown as Query<UserDocument | null, UserDocument>);
+
+        // Given: bcrypt.compare가 true를 반환 (비밀번호 일치)
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        // Given: JWT 토큰 생성 모킹
+        const accessToken = 'access_token_string';
+        const refreshToken = 'refresh_token_string';
+        mockJwtService.signAsync
+          .mockResolvedValueOnce(accessToken)
+          .mockResolvedValueOnce(refreshToken);
+
+        // Given: ConfigService 모킹
+        mockConfigService.get
+          .mockReturnValueOnce('7d') // JWT_REFRESH_EXPIRES_IN
+          .mockReturnValueOnce(604800); // JWT_REFRESH_EXPIRES_IN_SECONDS
+
+        // Given: Redis setex 실패 모킹
+        mockRedisClient.setex.mockRejectedValueOnce(
+          new Error('Redis connection failed'),
+        );
+
+        // When & Then: 에러가 발생해야 함
+        await expect(service.login(loginDto)).rejects.toThrow(
+          'Redis connection failed',
+        );
+      });
+
+      it('ConfigService에서 설정값이 없을 때 기본값을 사용해야 함', async () => {
+        // Given: 올바른 이메일과 비밀번호
+        const loginDto: LoginDto = {
+          email: 'test@example.com',
+          password: 'correctPassword',
+        };
+
+        // Given: 사용자 객체
+        const user = {
+          _id: '507f1f77bcf86cd799439011',
+          email: 'test@example.com',
+          password: 'hashed_correct_password',
+          nickname: '테스트유저',
+          wishList: [],
+          mannerTemperature: 36.5,
+          role: 'user',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        // Given: findOne이 사용자를 반환
+        mockUserModel.findOne.mockReturnValue({
+          exec: jest.fn().mockResolvedValue(user),
+        } as unknown as Query<UserDocument | null, UserDocument>);
+
+        // Given: bcrypt.compare가 true를 반환 (비밀번호 일치)
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        // Given: JWT 토큰 생성 모킹
+        const accessToken = 'access_token_string';
+        const refreshToken = 'refresh_token_string';
+        mockJwtService.signAsync
+          .mockResolvedValueOnce(accessToken)
+          .mockResolvedValueOnce(refreshToken);
+
+        // Given: ConfigService가 undefined 반환 (설정값 없음)
+        mockConfigService.get
+          .mockReturnValueOnce(undefined) // JWT_REFRESH_EXPIRES_IN
+          .mockReturnValueOnce(undefined); // JWT_REFRESH_EXPIRES_IN_SECONDS
+
+        // Given: Redis setex 모킹
+        mockRedisClient.setex.mockResolvedValue('OK');
+
+        // When: 로그인 메서드 호출
+        const result = await service.login(loginDto);
+
+        // Then: Refresh Token이 기본값 '7d'로 생성되었는지 확인
+        expect(mockJwtService.signAsync).toHaveBeenNthCalledWith(
+          2,
+          { sub: user._id.toString(), email: user.email },
+          { expiresIn: '7d' },
+        );
+
+        // Then: Redis에 기본값 7일(604800초)로 저장되었는지 확인
+        expect(mockRedisClient.setex).toHaveBeenCalledWith(
+          `refresh_token:${user._id.toString()}`,
+          7 * 24 * 60 * 60, // 기본 7일 (초 단위)
+          refreshToken,
+        );
+
+        // Then: 응답이 정상적으로 반환되었는지 확인
+        expect(result.accessToken).toBe(accessToken);
+        expect(result.refreshToken).toBe(refreshToken);
+      });
+    });
   });
 });

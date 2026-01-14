@@ -12,7 +12,6 @@ import Redis from 'ioredis';
 import type { StringValue } from 'ms';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
-import { AuthResponseDto } from './dto/auth-response.dto';
 import {
   ERROR_MESSAGES,
   JWT_DEFAULT_REFRESH_EXPIRES_IN,

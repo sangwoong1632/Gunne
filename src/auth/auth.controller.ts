@@ -56,8 +56,8 @@ export class AuthController {
 
     // Refresh Token을 Cookie로 설정
     const refreshTokenExpiry =
-      this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') ||
-      JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS;
+      (this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') ??
+        JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS) as number;
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true, // XSS 공격 방지
@@ -104,9 +104,10 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ accessToken: string }> {
     // Cookie에서 Refresh Token 추출
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken = (req.cookies as { refreshToken?: string })
+      ?.refreshToken;
 
-    if (!refreshToken) {
+    if (!refreshToken || typeof refreshToken !== 'string') {
       throw new HttpException(
         'Refresh Token이 없습니다.',
         HttpStatus.UNAUTHORIZED,
@@ -119,8 +120,8 @@ export class AuthController {
 
     // 새로운 Refresh Token을 Cookie로 설정
     const refreshTokenExpiry =
-      this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') ||
-      JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS;
+      (this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') ??
+        JWT_DEFAULT_REFRESH_EXPIRES_IN_SECONDS) as number;
 
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true, // XSS 공격 방지

@@ -31,6 +31,45 @@
 $ npm install
 ```
 
+## Development Setup (하이브리드 방식)
+
+### 1. 데이터베이스 서비스 실행 (Docker)
+
+```bash
+# MongoDB와 Redis를 Docker로 실행
+$ docker-compose up -d mongo redis
+```
+
+### 2. 애플리케이션 실행 (로컬)
+
+```bash
+# 의존성 설치 (최초 1회)
+$ npm install
+
+# 개발 모드로 실행 (코드 변경 시 자동 재시작)
+$ npm run start:dev
+
+# 또는 일반 개발 모드
+$ npm run start
+
+# 프로덕션 모드
+$ npm run start:prod
+```
+
+### 3. 환경 변수 설정
+
+`.env` 파일에 다음 설정이 필요합니다:
+
+```env
+MONGO_URI=mongodb://root:rootpassword@localhost:27017/nestdb?authSource=admin
+REDIS_HOST=localhost
+REDIS_PORT=6379
+JWT_SECRET=your-secret-key
+JWT_EXPIRES_IN=1h
+JWT_REFRESH_EXPIRES_IN=14d
+JWT_REFRESH_EXPIRES_IN_SECONDS=1209600
+```
+
 ## Compile and run the project
 
 ```bash

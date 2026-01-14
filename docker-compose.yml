@@ -24,17 +24,19 @@ services:
     command: redis-server --appendonly yes # 데이터 영구 저장 옵션 켜기
 
   # 2. NestJS 앱 서비스
-  app:
-    build: .
-    container_name: nest_app
-    ports:
-      - "3000:3000"
-    volumes:
-      # 내 컴퓨터의 코드 수정사항이 컨테이너에 바로 반영되도록 연결
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    depends_on:
-      - mongo
-    environment:
-      # 중요: 도커 내부에서는 'localhost' 대신 서비스 이름('mongo')을 씁니다.
-      MONGO_URI: mongodb://root:rootpassword@mongo:27017/nestdb?authSource=admin
+  # 하이브리드 방식 사용: DB는 Docker, 앱은 로컬에서 실행
+  # 앱을 Docker로 실행하려면 아래 주석을 해제하세요
+  # app:
+  #   build: .
+  #   container_name: nest_app
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - .:/usr/src/app
+  #     - /usr/src/app/node_modules
+  #     - /usr/src/app/dist
+  #   user: "${UID:-1000}:${GID:-1000}"
+  #   depends_on:
+  #     - mongo
+  #   environment:
+  #     MONGO_URI: mongodb://root:rootpassword@mongo:27017/nestdb?authSource=admin

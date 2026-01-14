@@ -137,8 +137,17 @@ export class AuthService {
   /**
    * 로그인 처리
    * 이메일과 비밀번호를 검증하고 JWT 토큰을 발급합니다.
+   * @returns Access Token, Refresh Token, 사용자 정보
    */
-  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+  async login(loginDto: LoginDto): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      email: string;
+      nickname: string;
+    };
+  }> {
     // 1. 사용자 검증
     const user = await this.validateUser(
       loginDto.email,
@@ -151,7 +160,7 @@ export class AuthService {
     // 3. Refresh Token을 Redis에 저장
     await this.saveRefreshToken(user._id.toString(), refreshToken);
 
-    // 4. 응답 반환
+    // 4. 응답 반환 (Refresh Token은 Controller에서 Cookie로 설정)
     return {
       accessToken,
       refreshToken,
@@ -181,17 +190,35 @@ export class AuthService {
   }
 
   /**
-   * Refresh Token으로 새로운 Access Token 발급
+   * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급 (Rotation)
+   * 이전 Refresh Token은 무효화하고 새로운 Refresh Token을 발급합니다.
    */
-  async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string }> {
+  async refreshAccessToken(refreshToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  }> {
     try {
       // 1. Refresh Token 검증 및 Redis 확인
       const payload = await this.validateRefreshToken(refreshToken);
 
-      // 2. 새로운 Access Token 생성
-      const accessToken = await this.jwtService.signAsync(payload);
+      // 2. 사용자 조회 (새 Refresh Token 생성을 위해)
+      const user = await this.userModel.findById(payload.sub).exec();
+      if (!user) {
+        throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
+      }
 
-      return { accessToken };
+      // 3. 이전 Refresh Token 무효화 (Redis에서 삭제)
+      const oldRefreshTokenKey = REDIS_KEY_PATTERNS.REFRESH_TOKEN(payload.sub);
+      await this.redisClient.del(oldRefreshTokenKey);
+
+      // 4. 새로운 Access Token 및 Refresh Token 생성
+      const { accessToken, refreshToken: newRefreshToken } =
+        await this.generateTokens(user);
+
+      // 5. 새로운 Refresh Token을 Redis에 저장
+      await this.saveRefreshToken(user._id.toString(), newRefreshToken);
+
+      return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
       // JWT 검증 실패 또는 Redis 확인 실패 시 동일한 에러 메시지 반환
       if (error instanceof UnauthorizedException) {

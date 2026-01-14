@@ -42,7 +42,7 @@ export class AuthService {
    * @returns 검증된 사용자 문서
    * @throws UnauthorizedException 이메일 또는 비밀번호가 올바르지 않을 경우
    */
-  private async validateUser(
+  async validateUser(
     email: string,
     password: string,
   ): Promise<UserDocument> {

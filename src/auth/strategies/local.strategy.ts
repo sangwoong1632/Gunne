@@ -1,6 +1,6 @@
 import { Strategy } from 'passport-local';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { AuthService } from '../auth.service';
 import { UserDocument } from '../../users/schemas/user.schema';
 
@@ -21,12 +21,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
    * @throws UnauthorizedException 인증 실패 시
    */
   async validate(email: string, password: string): Promise<UserDocument> {
-    try {
-      const user = await this.authService.validateUser(email, password);
-      return user;
-    } catch (error) {
-      // validateUser에서 이미 UnauthorizedException을 던지므로 그대로 전달
-      throw error;
-    }
+    // validateUser에서 이미 UnauthorizedException을 던지므로 그대로 전달
+    return await this.authService.validateUser(email, password);
   }
 }

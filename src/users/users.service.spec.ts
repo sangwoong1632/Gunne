@@ -6,6 +6,7 @@ import { UsersService } from './users.service';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { AuthService } from '../auth/auth.service';
 
 // bcrypt 모킹
 jest.mock('bcrypt', () => ({
@@ -14,6 +15,7 @@ jest.mock('bcrypt', () => ({
 
 describe('UsersService', () => {
   let service: UsersService;
+  let mockAuthService: jest.Mocked<Pick<AuthService, 'logout'>>;
 
   // Mock UserModel - 필요한 메서드만 모킹
   const mockUserModel = {
@@ -57,12 +59,21 @@ describe('UsersService', () => {
   };
 
   beforeEach(async () => {
+    // Mock AuthService
+    mockAuthService = {
+      logout: jest.fn(),
+    } as unknown as jest.Mocked<Pick<AuthService, 'logout'>>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
         {
           provide: getModelToken(User.name),
           useValue: mockUserModel,
+        },
+        {
+          provide: AuthService,
+          useValue: mockAuthService,
         },
       ],
     }).compile();
@@ -582,12 +593,19 @@ describe('UsersService', () => {
       // Given: findByIdAndDelete가 삭제된 사용자를 반환하도록 모킹
       mockUserModel.findByIdAndDelete.mockReturnValue(createMockQueryResult(deletedUser));
 
+      // Given: AuthService.logout이 성공하도록 모킹
+      mockAuthService.logout.mockResolvedValue(undefined);
+
       // When: 사용자 삭제
       await service.remove(userId);
 
       // Then: findByIdAndDelete가 올바른 ID로 호출되었는지 확인
       expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledWith(userId);
       expect(mockUserModel.findByIdAndDelete).toHaveBeenCalledTimes(1);
+
+      // Then: AuthService.logout이 호출되었는지 확인
+      expect(mockAuthService.logout).toHaveBeenCalledWith(userId);
+      expect(mockAuthService.logout).toHaveBeenCalledTimes(1);
     });
 
     it('should throw NotFoundException when user not found', async () => {

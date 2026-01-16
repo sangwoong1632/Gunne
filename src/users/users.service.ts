@@ -2,6 +2,8 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -14,10 +16,15 @@ import {
   MONGO_DUPLICATE_KEY_ERROR_CODE,
   ERROR_MESSAGES,
 } from './constants/user.constants';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @Inject(forwardRef(() => AuthService))
+    private authService: AuthService,
+  ) {}
 
   /**
    * 비밀번호를 해싱하는 헬퍼 메서드
@@ -108,6 +115,8 @@ export class UsersService {
     if (!deletedUser) {
       throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
     }
-    // 삭제 성공 시 void 반환
+
+    // 사용자 삭제 시 Refresh Token도 함께 삭제
+    await this.authService.logout(id);
   }
 }

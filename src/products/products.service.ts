@@ -66,12 +66,15 @@ export class ProductsService {
    * @throws NotFoundException 상품을 찾을 수 없을 경우
    */
   async findOne(id: string): Promise<ProductDocument> {
+    // 1. ID로 상품 조회
     const product = await this.productModel.findById(id).exec();
 
+    // 2. 상품이 존재하지 않으면 예외 발생
     if (!product) {
       throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
     }
 
+    // 3. 조회된 상품 반환
     return product;
   }
 

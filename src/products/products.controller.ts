@@ -23,6 +23,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
+import { ProductListResponseDto } from './dto/product-list-response.dto';
 import { ProductDocument } from './schemas/product.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserDocument } from '../users/schemas/user.schema';
@@ -34,7 +35,33 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   /**
-   * ProductDocument를 ProductResponseDto로 변환
+   * ProductDocument를 ProductListResponseDto로 변환 (목록용 - 제목, 가격, 첫 번째 이미지만)
+   */
+  private toListResponseDto(product: ProductDocument): ProductListResponseDto {
+    const productObject =
+      typeof product.toObject === 'function' ? product.toObject() : product;
+    const productRecord = productObject as unknown as {
+      _id: { toString: () => string } | string;
+      title: string;
+      price: number;
+      images: string[];
+    };
+
+    return {
+      id:
+        typeof productRecord._id === 'string'
+          ? productRecord._id
+          : productRecord._id.toString(),
+      title: productRecord.title,
+      price: productRecord.price,
+      image: productRecord.images && productRecord.images.length > 0
+        ? productRecord.images[0]
+        : undefined,
+    };
+  }
+
+  /**
+   * ProductDocument를 ProductResponseDto로 변환 (상세용 - 전체 정보)
    */
   private toResponseDto(product: ProductDocument): ProductResponseDto {
     const productObject =
@@ -135,37 +162,82 @@ export class ProductsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: '모든 상품 조회',
-    description: '등록된 모든 상품을 조회합니다.',
+    description: '등록된 모든 상품을 조회합니다. 제목, 가격, 대표 이미지(첫 번째 이미지)만 반환됩니다. 인증이 필요하지 않으며, 모든 사용자가 접근 가능합니다.',
   })
   @ApiResponse({
     status: 200,
-    description: '상품 목록 조회 성공',
-    type: [ProductResponseDto],
+    description: '상품 목록 조회 성공 (제목, 가격, 대표 이미지 반환)',
+    type: [ProductListResponseDto],
+    schema: {
+      example: [
+        {
+          id: '507f1f77bcf86cd799439011',
+          title: '아이폰 14 Pro',
+          price: 1200000,
+          image: 'https://example.com/image1.jpg',
+        },
+        {
+          id: '507f1f77bcf86cd799439012',
+          title: '갤럭시 S23',
+          price: 1000000,
+          image: 'https://example.com/image2.jpg',
+        },
+      ],
+    },
   })
-  async findAll(): Promise<ProductResponseDto[]> {
+  @ApiResponse({
+    status: 200,
+    description: '상품이 없을 경우 빈 배열 반환',
+    schema: {
+      example: [],
+    },
+  })
+  async findAll(): Promise<ProductListResponseDto[]> {
     const products = await this.productsService.findAll();
-    return products.map((product) => this.toResponseDto(product));
+    return products.map((product) => this.toListResponseDto(product));
   }
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: '상품 조회',
-    description: 'ID로 상품 정보를 조회합니다.',
+    description: 'ID로 상품 정보를 조회합니다. 인증이 필요하지 않으며, 모든 사용자가 접근 가능합니다.',
   })
   @ApiParam({
     name: 'id',
-    description: '상품 ID',
+    description: '상품 ID (MongoDB ObjectId)',
     example: '507f1f77bcf86cd799439011',
+    type: String,
   })
   @ApiResponse({
     status: 200,
     description: '상품 조회 성공',
     type: ProductResponseDto,
+    schema: {
+      example: {
+        id: '507f1f77bcf86cd799439011',
+        title: '아이폰 14 Pro',
+        price: 1200000,
+        status: {
+          status: '판매중',
+        },
+        images: ['https://example.com/image1.jpg'],
+        sellerId: '507f1f77bcf86cd799439010',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
+    },
   })
   @ApiResponse({
     status: 404,
-    description: '상품을 찾을 수 없음',
+    description: '상품을 찾을 수 없음 - 존재하지 않는 상품 ID이거나 잘못된 형식의 ID입니다.',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: '상품을 찾을 수 없습니다.',
+        error: 'Not Found',
+      },
+    },
   })
   async findOne(@Param('id') id: string): Promise<ProductResponseDto> {
     const product = await this.productsService.findOne(id);

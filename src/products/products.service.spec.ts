@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Query } from 'mongoose';
 import { ProductsService } from './products.service';
 import { Product, ProductDocument } from './schemas/product.schema';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -12,7 +12,33 @@ describe('ProductsService', () => {
   // Mock ProductModel - 필요한 메서드만 모킹
   const mockProductModel = {
     create: jest.fn<Promise<ProductDocument>, [unknown]>(),
-  } as unknown as jest.Mocked<Pick<Model<ProductDocument>, 'create'>>;
+    find: jest.fn(),
+    findById: jest.fn(),
+  } as unknown as jest.Mocked<
+    Pick<Model<ProductDocument>, 'create' | 'find' | 'findById'>
+  >;
+
+  /**
+   * Mock Mongoose Query의 반환값을 생성하는 헬퍼 함수
+   * Mongoose의 복잡한 타입을 처리하기 위한 헬퍼
+   * @param document 상품 문서 또는 null (일반 객체도 허용)
+   * @param shouldReject 에러를 발생시킬지 여부 (기본값: false)
+   * @param error 에러 객체 또는 에러 형태의 객체 (shouldReject가 true일 때 사용)
+   * @returns Mock Query 객체
+   */
+  const createMockQueryResult = (
+    document: ProductDocument | null | Record<string, unknown>,
+    shouldReject = false,
+    error?: Error | Record<string, unknown>,
+  ): Query<ProductDocument | null, ProductDocument> => {
+    const execMock = shouldReject && error
+      ? jest.fn().mockRejectedValue(error)
+      : jest.fn().mockResolvedValue(document as ProductDocument | null);
+    
+    return {
+      exec: execMock,
+    } as unknown as Query<ProductDocument | null, ProductDocument>;
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -83,6 +109,148 @@ describe('ProductsService', () => {
 
       // Then: 생성된 상품이 반환되어야 함
       expect(result).toEqual(createdProduct);
+    });
+  });
+
+  describe('findAll', () => {
+    it('should return all products', async () => {
+      // Given: 여러 상품 데이터
+      const products = [
+        {
+          _id: '507f1f77bcf86cd799439011',
+          title: '아이폰 14 Pro',
+          price: 1200000,
+          status: {
+            status: ProductStatusEnum.FOR_SALE,
+          },
+          images: ['https://example.com/image1.jpg'],
+          sellerId: '507f1f77bcf86cd799439010',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: '507f1f77bcf86cd799439012',
+          title: '갤럭시 S23',
+          price: 1000000,
+          status: {
+            status: ProductStatusEnum.FOR_SALE,
+          },
+          images: ['https://example.com/image2.jpg'],
+          sellerId: '507f1f77bcf86cd799439013',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+
+      // Given: find 메서드가 상품 배열을 반환하도록 모킹
+      mockProductModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(products),
+      } as unknown as Query<ProductDocument[], ProductDocument>);
+
+      // When: 모든 상품 조회
+      const result = await service.findAll();
+
+      // Then: find 메서드가 호출되었는지 확인
+      expect(mockProductModel.find).toHaveBeenCalled();
+      expect(mockProductModel.find).toHaveBeenCalledTimes(1);
+
+      // Then: 모든 상품이 반환되어야 함
+      expect(result).toEqual(products);
+      expect(result).toHaveLength(2);
+    });
+
+    it('should return empty array when no products exist', async () => {
+      // Given: 상품이 없는 경우
+      const emptyProducts: ProductDocument[] = [];
+
+      // Given: find 메서드가 빈 배열을 반환하도록 모킹
+      mockProductModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(emptyProducts),
+      } as unknown as Query<ProductDocument[], ProductDocument>);
+
+      // When: 모든 상품 조회
+      const result = await service.findAll();
+
+      // Then: find 메서드가 호출되었는지 확인
+      expect(mockProductModel.find).toHaveBeenCalled();
+      expect(mockProductModel.find).toHaveBeenCalledTimes(1);
+
+      // Then: 빈 배열이 반환되어야 함
+      expect(result).toEqual(emptyProducts);
+      expect(result).toHaveLength(0);
+    });
+
+    it('should handle database connection errors', async () => {
+      // Given: 데이터베이스 연결 에러
+      const dbError = new Error('Database connection failed');
+      mockProductModel.find.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(dbError),
+      } as unknown as Query<ProductDocument[], ProductDocument>);
+
+      // When & Then: DB 에러가 전파되어야 함
+      await expect(service.findAll()).rejects.toThrow(
+        'Database connection failed',
+      );
+      expect(mockProductModel.find).toHaveBeenCalled();
+    });
+  });
+
+  describe('findOne', () => {
+    it('should return a product by id', async () => {
+      // Given: 상품 ID
+      const productId = '507f1f77bcf86cd799439011';
+      const product = {
+        _id: productId,
+        title: '아이폰 14 Pro',
+        price: 1200000,
+        status: {
+          status: ProductStatusEnum.FOR_SALE,
+        },
+        images: ['https://example.com/image1.jpg'],
+        sellerId: '507f1f77bcf86cd799439010',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Given: findById가 상품을 반환하도록 모킹
+      mockProductModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(product),
+      } as unknown as Query<ProductDocument | null, ProductDocument>);
+
+      // When: ID로 상품 조회
+      const result = await service.findOne(productId);
+
+      // Then: findById가 올바른 ID로 호출되었는지 확인
+      expect(mockProductModel.findById).toHaveBeenCalledWith(productId);
+      expect(mockProductModel.findById).toHaveBeenCalledTimes(1);
+
+      // Then: 조회된 상품이 반환되어야 함
+      expect(result).toEqual(product);
+    });
+
+    it('should throw NotFoundException when product not found', async () => {
+      // Given: 존재하지 않는 상품 ID
+      const productId = '507f1f77bcf86cd799439099';
+
+      // Given: findById가 null을 반환하도록 모킹
+      mockProductModel.findById.mockReturnValue(createMockQueryResult(null));
+
+      // When & Then: 상품을 찾을 수 없을 때 에러 발생
+      await expect(service.findOne(productId)).rejects.toThrow();
+      expect(mockProductModel.findById).toHaveBeenCalledWith(productId);
+    });
+
+    it('should handle invalid id format', async () => {
+      // Given: 잘못된 형식의 ID
+      const invalidId = 'invalid-id';
+
+      // Given: MongoDB 에러 발생
+      const mongoError = new Error('Cast to ObjectId failed');
+      mockProductModel.findById.mockReturnValue(createMockQueryResult(null, true, mongoError));
+
+      // When & Then: 에러가 전파되어야 함
+      await expect(service.findOne(invalidId)).rejects.toThrow();
+      expect(mockProductModel.findById).toHaveBeenCalledWith(invalidId);
     });
 
     it('should throw error when title is missing', async () => {
